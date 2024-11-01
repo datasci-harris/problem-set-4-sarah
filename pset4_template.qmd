@@ -44,9 +44,18 @@ Please refer to the minilesson on code style [**here**](https://uchicago.zoom.us
 
 ## Download and explore the Provider of Services (POS) file (10 pts)
 
+```{python}
+import geopandas as gpd
+```
+
 1.  PRVDR_CTGRY_SBTYP_CD, PRVDR_CTGRY_SBTYP_CD, FAC_NAME, PRVDR_NUM, ZIP_CD, CBSA-URBN-RRL-IND
 
 2.  
+
+```{python}
+filepath = "/Users/sarahmorrison/Downloads/Github/problem-set-4-sarah/pos2016.csv"
+pos2016 = gpd.read_file(filepath)
+```
 
     a.  
 
