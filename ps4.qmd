@@ -170,22 +170,99 @@ unique_pos_yearly_chart + text
 ## Identify hospital closures in POS file (15 pts) (\*)
 
 1.  
+```{python}
+# filter 2016 data for only active hospitals
+active_2016 = pos2016_sth[pos2016_sth['PGM_TRMNTN_CD']=='00']
+
+# filter 2016 data for only the information needed for the question
+active_2016_list = active_2016[['PGM_TRMNTN_CD', 'PRVDR_NUM', 'FAC_NAME', 'ZIP_CD']]
+
+# ChatGPT Question: how to filter dataset based on value in another dataset
+# create dataframes with all the active 2016 hospitals
+# 2017
+active_2017 = pos2017_sth[pos2017_sth['PRVDR_NUM'].isin(active_2016_list['PRVDR_NUM'])]
+active_2017_list = active_2017[['PGM_TRMNTN_CD', 'PRVDR_NUM', 'FAC_NAME', 'ZIP_CD', 'year']]
+
+# 2018
+active_2018 = pos2018_sth[pos2018_sth['PRVDR_NUM'].isin(active_2016_list['PRVDR_NUM'])]
+active_2018_list = active_2018[['PGM_TRMNTN_CD', 'PRVDR_NUM', 'FAC_NAME', 'ZIP_CD', 'year']]
+
+# 2019
+active_2019 = pos2019_sth[pos2019_sth['PRVDR_NUM'].isin(active_2016_list['PRVDR_NUM'])]
+active_2019_list = active_2019[['PGM_TRMNTN_CD', 'PRVDR_NUM', 'FAC_NAME', 'ZIP_CD', 'year']]
+
+# create a list to iterate over
+active_list = [(2017, active_2017_list), (2018, active_2018_list), (2019, active_2019_list)]
+
+# ChatGPT Question: how to make a function to find values that are not 00 in three dataframes
+# create function 
+def find_inactives(active_2016_list, active_list, PGM_TRMNTN_CD='00'):
+    inactive_facilities_list = []
+    for year, df, in active_list:
+        merge_active = active_2016_list[['PRVDR_NUM', 'FAC_NAME', 'ZIP_CD']].merge(
+            df[['PRVDR_NUM', 'PGM_TRMNTN_CD']], on='PRVDR_NUM', how='left'
+        )
+        inactives = merge_active[merge_active['PGM_TRMNTN_CD'] != PGM_TRMNTN_CD]
+        inactives['year'] = year
+        inactive_facilities_list.append(inactives[['PRVDR_NUM', 'FAC_NAME', 'ZIP_CD', 'year']])
+    inactive_facilities = pd.concat(inactive_facilities_list).drop_duplicates(subset='PRVDR_NUM')
+    return inactive_facilities
+
+inactive_facilities = find_inactives(active_2016_list, active_list, PGM_TRMNTN_CD='00')
+print(inactive_facilities)
+
+# How many hospitals are there that fit this definition?
+inactive_facilities.shape
+```
 
 2.  
+```{python}
+# sort hospitals by name
+sorted_inactive_facilities = inactive_facilities.sort_values(by='FAC_NAME')[['FAC_NAME', 'year']]
+
+# show first 10
+sorted_inactive_facilities.head(10)
+```
 
 3.  
+```{python}
+# fix function so that it removes codes 00 and 01
+def find_closures(active_2016_list, active_list, closed_codes=['02', '03', '04', '07', '05', '06']):
+    inactive_facilities_list = []
+    for year, df, in active_list:
+        merge_active = active_2016_list[['PRVDR_NUM', 'FAC_NAME', 'ZIP_CD']].merge(
+            df[['PRVDR_NUM', 'PGM_TRMNTN_CD']], on='PRVDR_NUM', how='left'
+        )
+        inactives = merge_active[merge_active['PGM_TRMNTN_CD'].isin(closed_codes)]
+        inactives['year'] = year
+        inactive_facilities_list.append(inactives[['PRVDR_NUM', 'FAC_NAME', 'ZIP_CD', 'year']])
+    inactive_facilities = pd.concat(inactive_facilities_list).drop_duplicates(subset='PRVDR_NUM')
+    return inactive_facilities
 
-    a.  
+closed_facilities = find_closures(active_2016_list, active_list, closed_codes=['02', '03', '04', '07', '05', '06'])
+print(closed_facilities)
 
-    b.  
+closed_facilities.shape
+```
+
+    a.  Since there were 174 hospitals in the first list and 41 in the second, we can assume that 133 hospitals were actually mergers/acquisitions
+
+    b.  After the correction, there are only 41 hospitals left.
 
     c.  
+```{python}
+# sort hospitals by name
+sorted_closed_facilities = closed_facilities.sort_values(by='FAC_NAME')
+
+# show first 10
+sorted_closed_facilities.head(10)
+```
 
 ## Download Census zip code shapefile (10 pt)
 
 1.  
 
-    a.  
+    a.  In the shapfile folder, there is a dBase database file, a projection definition file, a shapefile, a shape index format file, and an extensible markup language file.
 
     b.  
 
