@@ -262,11 +262,41 @@ sorted_closed_facilities.head(10)
 
 1.  
 
-    a.  In the shapfile folder, there is a dBase database file, a projection definition file, a shapefile, a shape index format file, and an extensible markup language file.
+    a.  In the shapfile folder, there is a dBase database file, a projection definition file, a shapefile, a shape index format file, and an extensible markup language file. The shapefile stores the geometric data for the spatial features. The shape index file has the index for the geometric data for easy access. The database file has the attribute data in tabular form. The projection defintion file has the coordinate system for the shape file.
 
-    b.  
+    b.  The .dbf file is 6.4 MB, the .prj file is 165 B, the .shp file is 837.5 MB, the .shx file is 265 KB, and the .xml file is 16 KB. The .shp is the biggest file.
 
 2.  
+
+```{python}
+# read in shapefile
+zip_shapefile = gpd.read_file("gz_2010_us_860_00_500k.zip")
+```
+
+```{python}
+# filter shapefile for Texas zipcodes
+texas_shapefile = zip_shapefile[zip_shapefile['ZCTA5'].str.startswith(('733','75', '76', '77', '78', '79'))]
+
+# rename zipcode column to match pos file
+texas_shapefile = texas_shapefile.rename(columns={'ZCTA5': 'ZIP_CD'})
+
+# filter 2016 hospital for Texas zipcodes
+pos2016_tx = pos2016_sth[pos2016_sth['ZIP_CD'].str.startswith(('733','75', '76', '77', '78'))]
+
+# find number of hospitals per zipcode
+hospital_count = pos2016_tx.groupby('ZIP_CD').size().reset_index(name='hospital_count')
+
+# merge files
+hospital_count_map = texas_shapefile.merge(hospital_count, on='ZIP_CD', how='left')
+
+# preview data
+hospital_count_map
+
+# fill NAs with 0
+hospital_count_map['hospital_count'] = hospital_count_map['hospital_count'].fillna(0)
+
+hospital_count_map.plot(column='hospital_count', legend=True)
+```
 
 ## Calculate zip code’s distance to the nearest hospital (20 pts) (\*)
 
