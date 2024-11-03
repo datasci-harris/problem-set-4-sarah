@@ -352,45 +352,6 @@ I did a left merge and merged the texas zipcode centroids on the list of Texas z
 
 4.  
     a.  
-First draft:
-```{python}
-# ChatGPT Question: how to find the distance for 10 zipcodes to the nearest zipcode with a hospital
-
-# correct crs for measuring distance
-zips_texas_centroids = zips_texas_centroids.to_crs(epsg=5070)
-zips_withhospital_centroids = zips_withhospital_centroids.to_crs(epsg=5070)
-
-# get sample Texas zipcodes
-sampled_zips_texas = zips_texas_centroids.sample(n=10, random_state=1)
-
-# create function to calculate the nearest distance
-def calculate_nearest_distance(row, hospital_geometries):
-    current_geom = row.geometry
-    nearest_geom = nearest_points(current_geom, hospital_geometries.union_all())[1]
-    return current_geom.distance(nearest_geom)
-
-# create timer
-start_time_sample = time.time()
-
-# run function with the sample zipcodes
-sampled_zips_texas['distance_meters'] = sampled_zips_texas.apply(
-    calculate_nearest_distance, hospital_geometries=zips_withhospital_centroids['geometry'], axis=1
-)
-sampled_zips_texas['distance_miles'] = sampled_zips_texas['distance_meters'] * 0.000621371
-
-#end timer
-end_time_sample = time.time()
-
-# time taken for sample
-sample_duration = end_time_sample - start_time_sample
-print("Time taken for sampled calculation:", sample_duration, "seconds")
-print(sampled_zips_texas[['ZIP_CD', 'distance_miles']])
-
-# find time estimation for full sample
-print("Estimated time for ful calculation:", ((sample_duration/10)*len(zips_texas_centroids))/60, "minutes")
-```
-
-Second draft:
 ```{python}
 # ChatGPT Question: how to find the distance for 10 zipcodes to the nearest zipcode with a hospital
 
@@ -417,23 +378,6 @@ print("Estimated time for ful calculation:", ((sample_duration/10)*len(zips_texa
 ```
 
     b.  
-First Draft:
-```{python}
-# repeat for all texas zipcodes
-start_time_full = time.time()
-zips_texas_centroids['distance_meters'] = zips_texas_centroids.apply(
-    calculate_nearest_distance, hospital_geometries=zips_withhospital_centroids['geometry'], axis=1
-)
-zips_texas_centroids['distance_miles'] = zips_texas_centroids['distance_meters'] * 0.000621371
-end_time_full = time.time()
-
-# time taken for all Texas zipcodes
-print("Time taken for full calculation:", end_time_full - start_time_full, "seconds")
-
-print(zips_texas_centroids[['ZIP_CD', 'distance_miles']].head(10))
-```
-
-Second Draft:
 ```{python}
 # ChatGPT Question: how to find the distance for 10 zipcodes to the nearest zipcode with a hospital
 
