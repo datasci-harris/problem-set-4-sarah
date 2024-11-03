@@ -33,7 +33,7 @@ Please refer to the minilesson on code style [**here**](https://uchicago.zoom.us
 3.  Partner 1 will accept the `ps4` and then share the link it creates with their partner. You can only share it with one partner so you will not be able to change it after your partner has accepted.
 4.  "This submission is our work alone and complies with the 30538 integrity policy." Add your initials to indicate your agreement: \*\*SM\*\*
 5.  "I have uploaded the names of anyone else other than my partner and I worked with on the problem set [**here**](https://docs.google.com/forms/d/185usrCREQaUbvAXpWhChkjghdGgmAZXA3lPWpXLLsts/edit)" (1 point)
-6.  Late coins used this pset: \*\*0\*\* Late coins left after submission: \*\*3\*\*
+6.  Late coins used this pset: \*\*1\*\* Late coins left after submission: \*\*4\*\*
 7.  Knit your `ps4.qmd` to an PDF file to make `ps4.pdf`,
     -   The PDF should not be more than 25 pages. Use `head()` and re-size figures when appropriate.
 8.  (Partner 1): push `ps4.qmd` and `ps4.pdf` to your github repo.
@@ -48,6 +48,10 @@ Please refer to the minilesson on code style [**here**](https://uchicago.zoom.us
 import geopandas as gpd
 import pandas as pd
 import altair as alt
+import time
+import shapely
+from shapely import Point
+from shapely.ops import nearest_points
 ```
 
 1.  PRVDR_CTGRY_CD, PRVDR_CTGRY_SBTYP_CD, FAC_NAME, PRVDR_NUM, ZIP_CD, CBSA-URBN-RRL-IND, CITY_NAME, STATE_CD, PGM_TRMNTN_CD
@@ -262,7 +266,7 @@ sorted_closed_facilities.head(10)
 
 1.  
 
-    a.  In the shapfile folder, there is a dBase database file, a projection definition file, a shapefile, a shape index format file, and an extensible markup language file. The shapefile stores the geometric data for the spatial features. The shape index file has the index for the geometric data for easy access. The database file has the attribute data in tabular form. The projection defintion file has the coordinate system for the shape file.
+    a.  In the shapfile folder, there is a dBase database file, a projection definition file, a shapefile, a shape index format file, and an extensible markup language file. The shapefile stores the geometric features. The shape index file has the positional index. The database file has the attribute information. The projection defintion file describes that coordinate reference system.
 
     b.  The .dbf file is 6.4 MB, the .prj file is 165 B, the .shp file is 837.5 MB, the .shx file is 265 KB, and the .xml file is 16 KB. The .shp is the biggest file.
 
@@ -301,21 +305,193 @@ hospital_count_map.plot(column='hospital_count', legend=True)
 ## Calculate zip code’s distance to the nearest hospital (20 pts) (\*)
 
 1.  
+```{python}
+# create centroid column
+zip_shapefile['centroid'] = zip_shapefile['geometry'].centroid
+
+# rename zipcode column
+zip_shapefile = zip_shapefile.rename(columns={'ZCTA5': 'ZIP_CD'})
+
+# create geodataframe
+zips_all_centroids = gpd.GeoDataFrame(zip_shapefile[['ZIP_CD', 'centroid']], geometry='centroid')
+
+# find dimensions
+zips_all_centroids.shape
+```
+
+The dimensions of the GeoDataFrame are (33120, 2). The ZIP_CD column is all the zipcodes in the census data. The centroid column is the arithmetic mean position of all the zipcodes points in the polygon.
 
 2.  
+```{python}
+
+# create texas centroid geodataframe
+zips_texas_centroids = zip_shapefile[zip_shapefile['ZIP_CD'].str.startswith(('733','75', '76', '77', '78', '79'))]
+
+# Unique zipcodes in Texas subset
+print(zips_texas_centroids['ZIP_CD'].nunique())
+
+# create texas and border states centroid dataframe
+zips_texas_borderstates_centroids = zip_shapefile[zip_shapefile['ZIP_CD'].str.startswith(('7', '87', '88'))]
+
+# Unique zipcodes in Texas and Border States subset
+print(zips_texas_borderstates_centroids['ZIP_CD'].nunique())
+```
 
 3.  
+```{python}
+# filter 2016 hospitals Texas in texas for only active facilities
+active_2016_tx = pos2016_tx[pos2016_tx['PGM_TRMNTN_CD']=='00']
+
+# find number of active hospitals per zipcode
+active_hospital_count = active_2016_tx.groupby('ZIP_CD').size().reset_index(name='hospital_count')
+
+zips_withhospital_centroids = active_hospital_count.merge(zips_texas_centroids, on='ZIP_CD', how='left')
+```
+
+I did a left merge and merged the texas zipcode centroids on the list of Texas zipcodes with at least one hospital. This resulted in only keeping the zipcodes that the latter list identifies as having a hospital and added in the centroid information for each of those zipcodes.
 
 4.  
-
     a.  
+First draft:
+```{python}
+# ChatGPT Question: how to find the distance for 10 zipcodes to the nearest zipcode with a hospital
+
+# correct crs for measuring distance
+zips_texas_centroids = zips_texas_centroids.to_crs(epsg=5070)
+zips_withhospital_centroids = zips_withhospital_centroids.to_crs(epsg=5070)
+
+# get sample Texas zipcodes
+sampled_zips_texas = zips_texas_centroids.sample(n=10, random_state=1)
+
+# create function to calculate the nearest distance
+def calculate_nearest_distance(row, hospital_geometries):
+    current_geom = row.geometry
+    nearest_geom = nearest_points(current_geom, hospital_geometries.union_all())[1]
+    return current_geom.distance(nearest_geom)
+
+# create timer
+start_time_sample = time.time()
+
+# run function with the sample zipcodes
+sampled_zips_texas['distance_meters'] = sampled_zips_texas.apply(
+    calculate_nearest_distance, hospital_geometries=zips_withhospital_centroids['geometry'], axis=1
+)
+sampled_zips_texas['distance_miles'] = sampled_zips_texas['distance_meters'] * 0.000621371
+
+#end timer
+end_time_sample = time.time()
+
+# time taken for sample
+sample_duration = end_time_sample - start_time_sample
+print("Time taken for sampled calculation:", sample_duration, "seconds")
+print(sampled_zips_texas[['ZIP_CD', 'distance_miles']])
+
+# find time estimation for full sample
+print("Estimated time for ful calculation:", ((sample_duration/10)*len(zips_texas_centroids))/60, "minutes")
+```
+
+Second draft:
+```{python}
+# ChatGPT Question: how to find the distance for 10 zipcodes to the nearest zipcode with a hospital
+
+# get sample Texas zipcodes
+sampled_zips_texas = zips_texas_centroids.sample(n=10, random_state=1)
+
+# create timer
+start_time_sample = time.time()
+
+# run function with the sample zipcodes
+sample_distances = sampled_zips_texas.geometry.apply(
+    lambda x: zips_withhospital_centroids.geometry.distance(x).min()
+)
+
+#end timer
+end_time_sample = time.time()
+
+# time taken for sample
+sample_duration = end_time_sample - start_time_sample
+print("Time taken for sampled calculation:", sample_duration, "seconds")
+
+# find time estimation for full sample
+print("Estimated time for ful calculation:", ((sample_duration/10)*len(zips_texas_centroids))/60, "minutes")
+```
 
     b.  
+First Draft:
+```{python}
+# repeat for all texas zipcodes
+start_time_full = time.time()
+zips_texas_centroids['distance_meters'] = zips_texas_centroids.apply(
+    calculate_nearest_distance, hospital_geometries=zips_withhospital_centroids['geometry'], axis=1
+)
+zips_texas_centroids['distance_miles'] = zips_texas_centroids['distance_meters'] * 0.000621371
+end_time_full = time.time()
+
+# time taken for all Texas zipcodes
+print("Time taken for full calculation:", end_time_full - start_time_full, "seconds")
+
+print(zips_texas_centroids[['ZIP_CD', 'distance_miles']].head(10))
+```
+
+Second Draft:
+```{python}
+# ChatGPT Question: how to find the distance for 10 zipcodes to the nearest zipcode with a hospital
+
+# create timer
+start_time_full = time.time()
+
+# run function with the sample zipcodes
+zips_texas_centroids['distances'] = zips_texas_centroids.geometry.apply(
+    lambda x: zips_withhospital_centroids.geometry.distance(x).min()
+)
+
+#end timer
+end_time_full = time.time()
+
+# time taken for sample
+full_duration = end_time_full - start_time_full
+print("Time taken for sampled calculation:", (full_duration/60), "minutes")
+
+
+# How close was the actual duration to my estimated duration?
+seconds_off = full_duration - ((sample_duration/10)*len(zips_texas_centroids))
+print("I was off by:", seconds_off, 'seconds')
+```
+
+    c.
+```{python}
+# read in prj file
+with open('gz_2010_us_860_00_500k.prj', 'r') as file:
+    prj_info = file.read()
+
+print(prj_info)
+
+# correct crs for measuring distance https://epsg.io/5070
+zips_texas_centroids = zips_texas_centroids.to_crs(epsg=5070)
+zips_withhospital_centroids = zips_withhospital_centroids.to_crs(epsg=5070)
+
+# convert meters to miles
+# ChatGPT Question: How do I convert {prj_info} to units in miles
+lat_conversion_factor = 69  # miles per degree of latitude
+lon_conversion_factor = 59.2  # miles per degree of longitude
+
+# Average latitude for Texas
+avg_latitude = 31
+# Apply conversion 
+# For simplicity, we will assume a simple average here:
+zips_texas_centroids['distances_miles'] = zips_texas_centroids['distances'] * np.sqrt(lat_conversion_factor**2 + lon_conversion_factor**2)
+```
+
+The unit is measured in degrees.
 
 5.  
-
     a.  
-
+```{python}
+zips_texas_centroids['distance_hospital'] = zips_texas_centroids.geometry.apply(
+    lambda x: active_2016_tx.geometry.distance(x).min()
+    )
+```
+The unit is in degrees
     b.  
 
     c.  
@@ -331,3 +507,8 @@ hospital_count_map.plot(column='hospital_count', legend=True)
 4.  
 
 ## Reflecting on the exercise (10 pts)
+
+Partner 1: An issue with the "first pass" method is that, according to the data dictionary, 01 is for a merge or a closed hospital, so getting rid of 01 does not guarantee we are getting rid of only merged hospitals. A better way would potentially be to use strings to find similar hospital names in the same zipcode and look at how that changes across the years.
+
+Partner 2: I think the way we find affected zipcodes is effective. Since we calculate distance to nearest hospital, we get an accurate sense of how difficult healthcare access is for different zipcodes. Looking at quality of hospitals might give a better sense of inequality in the healthcare system. A zipcode could have a close hospital that is not great and they are still not as well off as others.
+
