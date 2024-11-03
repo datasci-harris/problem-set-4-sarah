@@ -345,7 +345,10 @@ active_2016_tx = pos2016_tx[pos2016_tx['PGM_TRMNTN_CD']=='00']
 # find number of active hospitals per zipcode
 active_hospital_count = active_2016_tx.groupby('ZIP_CD').size().reset_index(name='hospital_count')
 
-zips_withhospital_centroids = active_hospital_count.merge(zips_texas_centroids, on='ZIP_CD', how='left')
+zips_withhospital_centroids = gpd.GeoDataFrame(
+    active_hospital_count.merge(zips_texas_centroids, on='ZIP_CD', how='left'),
+    geometry='geometry')
+
 ```
 
 I did a left merge and merged the texas zipcode centroids on the list of Texas zipcodes with at least one hospital. This resulted in only keeping the zipcodes that the latter list identifies as having a hospital and added in the centroid information for each of those zipcodes.
