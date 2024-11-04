@@ -426,6 +426,7 @@ lon_conversion_factor = 59.2  # miles per degree of longitude
 avg_latitude = 31
 # Apply conversion 
 # For simplicity, we will assume a simple average here:
+import numpy as np
 zips_texas_centroids['distances_miles'] = zips_texas_centroids['distances'] * np.sqrt(lat_conversion_factor**2 + lon_conversion_factor**2)
 ```
 
@@ -434,9 +435,9 @@ The unit is measured in degrees.
 5.  
     a.  
 ```{python}
-zips_texas_centroids['distance_hospital'] = zips_texas_centroids.geometry.apply(
-    lambda x: active_2016_tx.geometry.distance(x).min()
-    )
+#zips_texas_centroids['distance_hospital'] = zips_texas_centroids.geometry.apply(
+ #   lambda x: active_2016_tx.geometry.distance(x).min()
+  #  )
 ```
 The unit is in degrees
     b.  
